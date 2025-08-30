@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect, useRef } from "react";
-import { useAuth } from "../context/authContext"; // Assuming you might want to save scores later
+import { useAuth } from "../context/authContext";
+import statsService from "../services/statsService";
 
 // A more extensive word list for a better experience
 const words = {
@@ -19,9 +21,16 @@ const Game = () => {
     const [errors, setErrors] = useState(0);
     const [isStarted, setIsStarted] = useState(false);
     const [isFinished, setIsFinished] = useState(false);
+    
+    // New states for statistics
+    const [wordsTyped, setWordsTyped] = useState(0);
+    const [savingResults, setSavingResults] = useState(false);
+    const [saveError, setSaveError] = useState(null);
+    const [gameStartTime, setGameStartTime] = useState(null);
 
     const inputRef = useRef(null);
-    const { user } = useAuth(); // Example of getting user data
+    const textDisplayRef = useRef(null); // New ref for text display area
+    const { user } = useAuth();
 
     // Function to generate a new block of text
     const generateText = () => {
@@ -48,7 +57,7 @@ const Game = () => {
             }, 1000);
         } else if (timeLeft === 0) {
             setIsStarted(false);
-            setIsFinished(true);
+            finishGame();
         }
         return () => clearInterval(timer);
     }, [isStarted, timeLeft]);
@@ -72,6 +81,10 @@ const Game = () => {
         setErrors(errorCount);
         setAccuracy(typedChars > 0 ? Math.round((correctChars / typedChars) * 100) : 100);
 
+        // Calculate words typed (approximate)
+        const wordsCount = Math.floor(correctChars / 5);
+        setWordsTyped(wordsCount);
+
         const elapsedTimeInMinutes = (timeLimit - timeLeft) / 60;
         if (elapsedTimeInMinutes > 0) {
             // WPM is calculated as (all typed characters / 5) / time (min)
@@ -79,17 +92,81 @@ const Game = () => {
             setWpm(Math.round(grossWpm > 0 ? grossWpm : 0));
         }
 
+        // Auto-scroll to keep cursor in view
+        scrollToKeepCursorVisible();
+
     }, [userInput, targetText, timeLeft, timeLimit, isStarted]);
 
+    // New function to auto-scroll and keep cursor visible
+    const scrollToKeepCursorVisible = () => {
+        if (!textDisplayRef.current) return;
+
+        const container = textDisplayRef.current;
+        const cursorElement = container.querySelector('.cursor-position');
+        
+        if (cursorElement) {
+            const containerRect = container.getBoundingClientRect();
+            const cursorRect = cursorElement.getBoundingClientRect();
+            
+            // Check if cursor is below visible area
+            if (cursorRect.bottom > containerRect.bottom) {
+                container.scrollTop += cursorRect.bottom - containerRect.bottom + 20;
+            }
+            // Check if cursor is above visible area
+            else if (cursorRect.top < containerRect.top) {
+                container.scrollTop -= containerRect.top - cursorRect.top + 20;
+            }
+        }
+    };
 
     const handleInputChange = (e) => {
         const value = e.target.value;
         if (!isStarted && value.length > 0) {
             setIsStarted(true);
             setIsFinished(false);
+            setGameStartTime(new Date());
         }
         if (value.length <= targetText.length) {
             setUserInput(value);
+        }
+    };
+
+    // New function to handle game completion and save results
+    const finishGame = async () => {
+        setIsFinished(true);
+        
+        // Only save results if user is logged in and actually typed something
+        if (user && userInput.length > 0) {
+            await saveGameResults();
+        }
+    };
+
+    // New function to save game results to backend
+    const saveGameResults = async () => {
+        try {
+            setSavingResults(true);
+            setSaveError(null);
+
+            const gameData = {
+                wpm: wpm,
+                accuracy: accuracy,
+                wordsTyped: wordsTyped,
+                timeTaken: timeLimit - timeLeft,
+                errorsMade: errors,
+                gameMode: 'standard',
+                textDifficulty: difficulty.toLowerCase(),
+                gameId: null, // This is a solo game
+                playerId: null // This is a solo game
+            };
+
+            await statsService.saveGameResult(gameData);
+            console.log('✅ Game result saved successfully!');
+            
+        } catch (error) {
+            console.error('❌ Failed to save game result:', error);
+            setSaveError('Failed to save your results. Please check your connection.');
+        } finally {
+            setSavingResults(false);
         }
     };
 
@@ -101,8 +178,17 @@ const Game = () => {
         setWpm(0);
         setAccuracy(100);
         setErrors(0);
+        setWordsTyped(0);
+        setSavingResults(false);
+        setSaveError(null);
+        setGameStartTime(null);
         generateText();
         inputRef.current?.focus();
+        
+        // Reset scroll position
+        if (textDisplayRef.current) {
+            textDisplayRef.current.scrollTop = 0;
+        }
     };
 
     const renderTargetText = () => {
@@ -113,10 +199,10 @@ const Game = () => {
                     ? "text-cyan-300" // Correctly typed
                     : "text-red-500 bg-red-900/50 rounded"; // Incorrectly typed
             }
-            // Render the caret
+            // Render the caret with a special class for scrolling
             if (index === userInput.length) {
                 return (
-                    <span key={index}>
+                    <span key={index} className="cursor-position">
                         <span className="animate-pulse text-cyan-300">|</span>
                         <span className={className}>{char}</span>
                     </span>
@@ -167,9 +253,17 @@ const Game = () => {
                     </div>
                 </div>
 
-                {/* Text Display */}
+                {/* Text Display - FIXED with scrollable container */}
                 <div className="relative">
-                    <div className="text-2xl leading-relaxed tracking-wider bg-slate-800/50 border border-slate-700 rounded-lg p-6 h-48 overflow-hidden mb-4 backdrop-blur-sm">
+                    <div 
+                        ref={textDisplayRef}
+                        className="text-2xl leading-relaxed tracking-wider bg-slate-800/50 border border-slate-700 rounded-lg p-6 h-48 overflow-y-auto mb-4 backdrop-blur-sm scroll-smooth"
+                        style={{ 
+                            scrollBehavior: 'smooth',
+                            wordWrap: 'break-word',
+                            whiteSpace: 'pre-wrap'
+                        }}
+                    >
                         {renderTargetText()}
                     </div>
                     <input
@@ -203,6 +297,20 @@ const Game = () => {
                     </div>
                 </div>
 
+                {/* Saving Status (NEW) */}
+                {savingResults && (
+                    <div className="text-center mb-4">
+                        <p className="text-cyan-300 animate-pulse">💾 Saving your results...</p>
+                    </div>
+                )}
+
+                {/* Save Error (NEW) */}
+                {saveError && (
+                    <div className="text-center mb-4">
+                        <p className="text-red-400">⚠️ {saveError}</p>
+                    </div>
+                )}
+
                 {/* Reset Button */}
                 <div className="text-center">
                     <button
@@ -213,28 +321,74 @@ const Game = () => {
                     </button>
                 </div>
 
-                {/* Final Score Modal */}
+                {/* Final Score Modal (ENHANCED) */}
                 {isFinished && (
                     <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center backdrop-blur-md">
-                        <div className="bg-slate-800 border border-cyan-500/50 p-8 rounded-xl text-center shadow-2xl">
+                        <div className="bg-slate-800 border border-cyan-500/50 p-8 rounded-xl text-center shadow-2xl max-w-lg mx-4">
                             <h3 className="text-2xl font-bold text-cyan-300 mb-2">Time's Up!</h3>
                             <p className="text-slate-400 mb-6">Here's your final score:</p>
-                            <div className="flex gap-6 justify-center mb-8">
-                                <div>
-                                    <p className="text-slate-400">WPM</p>
-                                    <p className="text-4xl font-bold text-cyan-300">{wpm}</p>
+                            
+                            {/* Enhanced Results Display */}
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                <div className="bg-slate-700/50 p-4 rounded-lg">
+                                    <p className="text-slate-400 text-sm">WPM</p>
+                                    <p className="text-3xl font-bold text-cyan-300">{wpm}</p>
                                 </div>
-                                <div>
-                                    <p className="text-slate-400">Accuracy</p>
-                                    <p className="text-4xl font-bold text-cyan-300">{accuracy}%</p>
+                                <div className="bg-slate-700/50 p-4 rounded-lg">
+                                    <p className="text-slate-400 text-sm">Accuracy</p>
+                                    <p className="text-3xl font-bold text-cyan-300">{accuracy}%</p>
+                                </div>
+                                <div className="bg-slate-700/50 p-4 rounded-lg">
+                                    <p className="text-slate-400 text-sm">Words Typed</p>
+                                    <p className="text-2xl font-bold text-cyan-300">{wordsTyped}</p>
+                                </div>
+                                <div className="bg-slate-700/50 p-4 rounded-lg">
+                                    <p className="text-slate-400 text-sm">Errors</p>
+                                    <p className="text-2xl font-bold text-cyan-300">{errors}</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={resetGame}
-                                className="bg-cyan-500 text-slate-900 font-bold px-8 py-3 rounded-lg hover:bg-cyan-400 transition-all duration-300"
-                            >
-                                Try Again
-                            </button>
+
+                            {/* Save Status in Modal */}
+                            {user && savingResults && (
+                                <p className="text-cyan-300 text-sm mb-4 animate-pulse">
+                                    💾 Saving to your profile...
+                                </p>
+                            )}
+                            
+                            {user && !savingResults && !saveError && (
+                                <p className="text-green-400 text-sm mb-4">
+                                    ✅ Results saved to your profile!
+                                </p>
+                            )}
+
+                            {saveError && (
+                                <p className="text-red-400 text-sm mb-4">
+                                    ⚠️ {saveError}
+                                </p>
+                            )}
+
+                            {!user && (
+                                <p className="text-yellow-400 text-sm mb-4">
+                                    💡 Sign in to save your results and track progress!
+                                </p>
+                            )}
+
+                            <div className="flex gap-4 justify-center">
+                                <button
+                                    onClick={resetGame}
+                                    className="bg-cyan-500 text-slate-900 font-bold px-6 py-3 rounded-lg hover:bg-cyan-400 transition-all duration-300"
+                                >
+                                    Try Again
+                                </button>
+                                {user && (
+                                    <button
+                                        onClick={() => window.location.href = '/profile'}
+                                        className="bg-slate-600 text-cyan-300 font-bold px-6 py-3 rounded-lg hover:bg-slate-500 transition-all duration-300 border border-cyan-500/30"
+                                    >
+                                        View Profile
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
