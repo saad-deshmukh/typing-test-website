@@ -1,12 +1,7 @@
-// backend/models/player.js
-module.exports = (sequelize, DataTypes) => {
+export default (sequelize, DataTypes) => {
   const Player = sequelize.define("Player", {
-    username: {
-      type: DataTypes.STRING,
-      allowNull: false
-    },
     speed: {
-      type: DataTypes.FLOAT,
+      type: DataTypes.INTEGER,
       defaultValue: 0
     },
     accuracy: {
@@ -15,12 +10,19 @@ module.exports = (sequelize, DataTypes) => {
     },
     time: {
       type: DataTypes.FLOAT,
-      defaultValue: 0
+      allowNull: true
+    },
+    isHost: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
     }
   });
 
   Player.associate = (models) => {
-    Player.belongsTo(models.Game, { foreignKey: "gameId", as: "game" });
+    Player.belongsTo(models.Game, { foreignKey: "gameId" });
+    Player.belongsTo(models.User, { foreignKey: "userId" });
+    // Player can have game statistics record
+    Player.hasOne(models.GameStats, { foreignKey: "playerId", as: "gameStats" });
   };
 
   return Player;
