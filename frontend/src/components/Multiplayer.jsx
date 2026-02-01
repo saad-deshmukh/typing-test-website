@@ -1,21 +1,31 @@
 
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import io from "socket.io-client";
 import axios from "axios";
+import { Castle, Swords } from 'lucide-react';
 import { useAuth } from "../context/authContext";
 import { useNavigate } from "react-router-dom";
+import DOMPurify from 'dompurify';
 import statsService from "../services/statsService";
 
-
+// Configuration 
 const API_BASE_URL = "http://localhost:5000/api";
 const SOCKET_URL = "http://localhost:5000";
-
-
-const socket = io(SOCKET_URL);
 
 const MultiplayerGame = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const [socket, setSocket] = useState(null);
+
+    // Initialize Socket with Token
+    useEffect(() => {
+        const newSocket = io(SOCKET_URL, {
+            withCredentials: true
+        });
+        setSocket(newSocket);
+        return () => newSocket.disconnect();
+    }, []);
+
     const [roomTokenInput, setRoomTokenInput] = useState("");
     const [gameState, setGameState] = useState({
         roomToken: "",
@@ -23,30 +33,45 @@ const MultiplayerGame = () => {
         status: "pending",
         text: "",
         startTime: null,
-        playerId: null,
         gameId: null,
     });
-    const [inputText, setInputText] = useState("");
+
+    const currentPlayerId = useMemo(() => {
+        if (!user?.id || !gameState.players.length) return null;
+        return gameState.players.find(p => p.User?.id === user.id)?.id;
+    }, [gameState.players, user?.id]);
+
+
+    const [activeWordIndex, setActiveWordIndex] = useState(0);
+    const [currentInput, setCurrentInput] = useState("");
+    const [waitingForOthers, setWaitingForOthers] = useState(false);
+
     const [playerProgress, setPlayerProgress] = useState({});
     const [error, setError] = useState("");
 
-    // New states for statistics
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState('');
+    const [validationError, setValidationError] = useState('');
+
+
+    // Statistics
     const [gameStartTime, setGameStartTime] = useState(null);
     const [finalStats, setFinalStats] = useState(null);
     const [savingStats, setSavingStats] = useState(false);
 
     const inputRef = useRef(null);
-    
-    const totalKeystrokes = useRef(0);
+
+    const targetWords = useMemo(() => {
+        return gameState.text ? gameState.text.split(" ") : [];
+    }, [gameState.text]);
 
     const api = axios.create({
         baseURL: API_BASE_URL,
-        headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        withCredentials: true
     });
 
     useEffect(() => {
+        if (!socket) return;
         socket.on("updateRoom", (updatedPlayers) => {
             setGameState(prev => ({ ...prev, players: updatedPlayers }));
         });
@@ -59,188 +84,481 @@ const MultiplayerGame = () => {
                 startTime,
                 gameId
             }));
-            setInputText("");
+
+            // Reset Game Logic
+            setActiveWordIndex(0);
+            setCurrentInput("");
+            setWaitingForOthers(false);
             setPlayerProgress({});
             setGameStartTime(new Date());
-            
-            // RESET keystroke counter for the new game
-            totalKeystrokes.current = 0;
-            
-            inputRef.current?.focus();
+
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 100);
         });
 
         socket.on("progressUpdate", ({ playerId, progress, accuracy, wpm }) => {
             setPlayerProgress(prev => ({ ...prev, [playerId]: { progress, accuracy, wpm } }));
         });
 
+        socket.on("bulkProgressUpdate", (updates) => {
+            setPlayerProgress(prev => {
+                const newState = { ...prev };
+                updates.forEach(u => {
+                    newState[u.playerId] = {
+                        progress: u.progress,
+                        accuracy: u.accuracy,
+                        wpm: u.wpm
+                    };
+                });
+                return newState;
+            });
+        });
+
         socket.on("endGame", async (results) => {
-            if (user && gameState.playerId) {
+
+            if (user && currentPlayerId) {
                 await saveMultiplayerGameStats(results);
             }
+            // FETCH players from API + create lookup
+            const playersWithUsernames = results.map(result => ({
+                id: `player_${result.userId}`,
+                User: {
+                    id: result.userId,
+                    username: result.isHost ? 'Host_Player' : `Player_${result.userId}` // TODO: Fetch real usernames
+                }
+            }));
 
             navigate(`/results/${gameState.roomToken}`, {
-                state: { results, players: gameState.players, gameStats: finalStats }
+                state: {
+                    results,           // Backend sends correct playerId
+                    players: playersWithUsernames,
+                    gameStats: finalStats
+                }
             });
+        });
+
+
+
+        socket.on("syncState", ({ startTime, gameText, status, existingProgress, currentWordIndex }) => {
+            //  Restore Game Data
+            setGameState(prev => ({
+                ...prev,
+                status: status === 'waiting' ? 'lobby' : status,
+                text: gameText,
+                startTime: new Date(startTime),
+                gameId: prev.gameId
+            }));
+
+            //  Restore Typing Progress 
+            if (status === 'in-progress') {
+                setActiveWordIndex(currentWordIndex || 0); // Jump to the correct word
+                setGameStartTime(new Date(startTime)); // Sync timer
+
+                setPlayerProgress(prev => ({
+                    ...prev,
+                    [currentPlayerId]: { progress: existingProgress, accuracy: 100, wpm: 0 }
+                }));
+            }
         });
 
         return () => {
             socket.off("updateRoom");
             socket.off("startGame");
             socket.off("progressUpdate");
+            socket.off("bulkProgressUpdate");
             socket.off("endGame");
+            socket.off("syncState");
         };
-    }, [gameState.roomToken, gameState.players, gameState.playerId, finalStats, user, navigate]);
+    }, [navigate, user, gameState.roomToken, finalStats]);
 
-    // Save multiplayer game statistics
+    // useeffect for host 
+    useEffect(() => {
+        if (!socket) return;
+
+        // Listen for the specific destruction event
+        socket.on("roomDestroyed", (reason) => {
+            alert(`⚠️ ${reason}`);
+            navigate("/"); // Redirect to Home
+        });
+
+        return () => {
+            socket.off("roomDestroyed");
+        };
+    }, [socket, navigate]);
+
     const saveMultiplayerGameStats = async (results) => {
         try {
             setSavingStats(true);
-
-            const playerResult = results.find(result =>
-                result.playerId === gameState.playerId
-            );
-
+            const playerResult = results.find(result => result.playerId === currentPlayerId);
             if (!playerResult) return;
 
-            const gameEndTime = new Date();
-            const timeTaken = Math.round((gameEndTime - gameStartTime) / 1000);
-
-            // Recalculate basic stats for storage based on final result
-            const correctChars = Math.floor((playerResult.accuracy / 100) * inputText.length);
-            const wordsTyped = Math.floor(correctChars / 5);
-            const errorsMade = inputText.length - correctChars;
-
+            const stats = playerResult.stats || {};
             const gameData = {
-                wpm: playerResult.wpm || 0,
-                accuracy: playerResult.accuracy || 0,
-                wordsTyped: wordsTyped,
-                timeTaken: timeTaken,
-                errorsMade: errorsMade,
+                wpm: stats.wpm || 0,
+                accuracy: stats.accuracy || 0,
+                wordsTyped: stats.wordsTyped || 0,
+                timeTaken: stats.timeTaken || 0,
+                errorsMade: stats.errorsMade || 0,
                 gameMode: 'multiplayer',
                 textDifficulty: 'medium',
                 gameId: gameState.gameId,
-                playerId: gameState.playerId
+                playerId: currentPlayerId
             };
 
             await statsService.saveGameResult(gameData);
             setFinalStats(gameData);
-            console.log('✅ Multiplayer game stats saved!');
-
         } catch (error) {
-            console.error('❌ Failed to save multiplayer game stats:', error);
+            console.error('Failed to save multiplayer game stats:', error);
         } finally {
             setSavingStats(false);
         }
     };
 
-    // --- API Functions ---
+    // API Functions 
+
+    //  Sanitize and validate token
+    const sanitizeAndValidateToken = (input) => {
+        if (!input) return { isValid: false, sanitized: '', error: 'Token required' };
+
+        const sanitized = DOMPurify.sanitize(input, {
+            ALLOWED_TAGS: [],
+            ALLOWED_ATTR: []
+        }).trim().replace(/[^a-zA-Z0-9-]/g, '');
+
+        if (sanitized.length === 0) return { isValid: false, sanitized: '', error: 'Invalid token format' };
+        if (sanitized.length > 60) return { isValid: false, sanitized: '', error: 'Token too long (max 60 chars)' };
+        if (sanitized.length < 4) return { isValid: false, sanitized: '', error: 'Token too short (min 4 chars)' };
+
+        return { isValid: true, sanitized };
+    };
+
+    //  Real time input handler
+    const handleInputChange = (e) => {
+        setRoomTokenInput(e.target.value);
+        setValidationError(''); // Clear on typing
+    };
+
     const handleCreateRoom = async () => {
-        setError("");
+        if (!socket) return;
         try {
             const response = await api.post("/game/create-room");
-            const { roomToken, playerId, gameId } = response.data;
-            socket.emit("subscribeToRoom", { roomToken, playerId });
-            setGameState({
-                ...gameState,
-                status: 'lobby',
-                roomToken,
-                playerId,
-                gameId
-            });
+            const { roomToken, gameId } = response.data;
+            socket.emit("subscribeToRoom", { roomToken });
+            setGameState({ ...gameState, status: 'lobby', roomToken, gameId });
         } catch (err) {
-            setError("Failed to create battle chamber. Please try again.");
+            // Handle Active Game Conflict 
+            if (err.response && err.response.data.error === "ACTIVE_GAME_EXISTS") {
+                const oldRoom = err.response.data.roomToken;
+                const confirmLeave = window.confirm(
+                    `You are already in an active battle (Room: ${oldRoom}).\n\nDo you want to FORFEIT that game to start a new one?`
+                );
+
+                if (confirmLeave) {
+                    //  Call API to leave the old game
+                    await api.post("/game/leave");
+                    //  Retry creating the new room
+                    handleCreateRoom();
+                }
+                return;
+            }
+            setError("Failed to create battle chamber.");
         }
     };
 
+
+    // Join handler
     const handleJoinRoom = async (e) => {
         e.preventDefault();
-        setError("");
-        if (!roomTokenInput.trim()) return;
+        setIsSubmitting(true);
+        setValidationError('');
+        setSubmitError('');
+
         try {
-            const response = await api.post("/game/join-room", { roomToken: roomTokenInput.trim() });
-            const { roomToken, playerId, gameId } = response.data;
-            socket.emit("subscribeToRoom", { roomToken, playerId });
-            setGameState({
-                ...gameState,
-                status: 'lobby',
-                roomToken,
-                playerId,
-                gameId
+            // Client validation
+            const { isValid, sanitized, error } = sanitizeAndValidateToken(roomTokenInput);
+            if (!isValid) {
+                setValidationError(error);
+                setIsSubmitting(false);
+                return;
+            }
+
+            //  Rate limiting
+            const now = Date.now();
+            const attempts = JSON.parse(localStorage.getItem('joinAttempts') || '[]');
+            const recentAttempts = attempts.filter(a => now - a.timestamp < 60000);
+
+            if (recentAttempts.length >= 3) {
+                setValidationError('Too many attempts. Wait 1 minute.');
+                setIsSubmitting(false);
+                return;
+            }
+
+            recentAttempts.push({ timestamp: now });
+            localStorage.setItem('joinAttempts', JSON.stringify(recentAttempts.slice(-3)));
+
+            if (!socket) throw new Error('Connection lost. Please refresh.');
+
+            const response = await api.post("/game/join-room", {
+                roomToken: sanitized
+            }, {
+                timeout: 10000,
+                headers: { 'Content-Type': 'application/json' }
             });
+
+            const { roomToken, gameId } = response.data;
+            socket.emit("subscribeToRoom", { roomToken: sanitized });
+
+            setRoomTokenInput('');
+            localStorage.removeItem('joinAttempts');
+            setGameState({ ...gameState, status: 'lobby', roomToken, gameId });
+
         } catch (err) {
-            setError("Battle chamber not found or challenge has already begun.");
+            if (err.code === 'ECONNABORTED') {
+                setSubmitError('Request timeout. Please try again.');
+            } else if (!err.response) {
+                setSubmitError('Network error. Check your connection.');
+            } else if (err.response.status >= 500) {
+                setSubmitError('Server error. Try again later.');
+            } else if (err.response?.data?.error === "ACTIVE_GAME_EXISTS") {
+                const oldRoom = err.response.data.roomToken || 'Unknown';
+                const confirmLeave = window.confirm(
+                    ` Active in Room: ${oldRoom}\n\nFORFEIT & join new chamber?`
+                );
+                if (confirmLeave) {
+                    await api.post("/game/leave", {}, { timeout: 5000 });
+                    const retryResponse = await api.post("/game/join-room", {
+                        roomToken: sanitizeAndValidateToken(roomTokenInput).sanitized
+                    });
+                    const { roomToken, gameId } = retryResponse.data;
+                    socket.emit("subscribeToRoom", { roomToken });
+                    setGameState({ ...gameState, status: 'lobby', roomToken, gameId });
+                }
+            } else {
+                setSubmitError(err.response?.data?.error || "Chamber not found.");
+            }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
-    // --- Game Action Functions ---
+
     const handleStartGame = () => {
         if (gameState.players.length < 2) {
-            setError("You need at least 2 guild members to start the battle!");
+            setError("You need at least 2 guild members to start!");
             return;
         }
-        setError("");
         socket.emit("requestStartGame", { roomToken: gameState.roomToken });
     };
 
-    const handleTyping = (e) => {
-        const typedText = e.target.value;
-        if (typedText.length > gameState.text.length) return;
-        
-        setInputText(typedText);
+    // Sync active session across tabs 
+    const checkActiveSession = async () => {
+        // Only run if we don't already have a loaded state locally
+        if (gameState.roomToken) return;
 
-        // 1. STRICT PROGRESS: Calculate correct characters until the first error
-        let correctChars = 0;
-        for (let i = 0; i < typedText.length; i++) {
-            if (typedText[i] === gameState.text[i]) {
-                correctChars++;
-            } else {
-                // Stop counting correct chars immediately upon mismatch
-                break;
+        try {
+            const response = await api.get("/game/status");
+            if (response.data.active) {
+                const { roomToken, gameId, status } = response.data;
+                //  Re-connect Socket
+                if (socket) {
+                    socket.emit("subscribeToRoom", { roomToken });
+                }
+
+                //  Restore State (Redirects UI to Game)
+                setGameState(prev => ({
+                    ...prev,
+                    roomToken,
+                    gameId,
+                    status: status === 'waiting' ? 'lobby' : 'in-progress'
+                }));
             }
+        } catch (err) {
+            console.error("Session check failed", err);
+        }
+    };
+    useEffect(() => {
+        checkActiveSession();
+    }, [socket]);
+
+    const handleCancelGame = () => {
+        if (window.confirm("Are you sure you want to disband the lobby? All players will be disconnected.")) {
+            socket.emit("cancelGame", { roomToken: gameState.roomToken });
+        }
+    };
+    const calculateStats = () => {
+        // Calculate total characters typed correctly so far
+        let completedChars = 0;
+        for (let i = 0; i < activeWordIndex; i++) {
+            completedChars += targetWords[i].length + 1; // +1 for the space
+        }
+        completedChars += currentInput.length;
+
+        // Progress 
+        const progress = Math.min((completedChars / gameState.text.length) * 100, 100);
+
+        // Time
+        const currentTime = new Date();
+        const timeElapsedSec = (currentTime - gameStartTime) / 1000;
+        const timeElapsedMin = timeElapsedSec / 60;
+
+        // WPM: (Total Correct Chars / 5) / TimeInMinutes
+        let wpm = 0;
+        if (timeElapsedMin > 0) {
+            wpm = Math.round((completedChars / 5) / timeElapsedMin);
         }
 
-        const progress = (correctChars / gameState.text.length) * 100;
-        const correctPrefixText = gameState.text.substring(0, correctChars);
-        const wordCount = correctPrefixText.trim().split(/\s+/).filter(Boolean).length;
+        // Accuracy (Since we block wrong inputs, accuracy is technically always 100%)
+        const accuracy = 100;
 
-        let errors = typedText.length - correctChars;
-        
-        // 2. STRICT ACCURACY: Based on Total Keystrokes vs Correct Characters
-        const accuracy = totalKeystrokes.current > 0 
-            ? Math.round((correctChars / totalKeystrokes.current) * 100) 
-            : 100;
+        return { progress, wpm, accuracy, completedChars, timeElapsedSec };
+    };
 
-        const timeElapsed = (new Date() - new Date(gameState.startTime)) / 1000 / 60;
-        const wpm = timeElapsed > 0 ? Math.round(wordCount / timeElapsed) : 0;
-        
-        setPlayerProgress(prev => ({ ...prev, [gameState.playerId]: { progress, accuracy, wpm } }));
+    // Handle Key Down
+    const handleKeyDown = (e) => {
+        if (waitingForOthers) return;
 
-        socket.emit("playerProgress", { roomToken: gameState.roomToken, progress, accuracy, wordCount });
+        // Only Space and Enter move to next word
+        if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
 
-        // 3. COMPLETION CHECK: Must match length AND be fully correct
-        if (typedText.length === gameState.text.length && correctChars === gameState.text.length) {
-            const finalPlayerStats = {
-                wpm,
-                accuracy,
-                progress: 100,
-                timeTaken: Math.round((new Date() - gameStartTime) / 1000),
-                wordsTyped: wordCount,
-                errorsMade: errors
-            };
+            const currentTargetWord = targetWords[activeWordIndex];
 
-            socket.emit("playerFinished", {
-                roomToken: gameState.roomToken,
-                accuracy,
-                stats: finalPlayerStats
-            });
+            //  Must match word strictly
+            if (currentInput === currentTargetWord) {
+                const nextIndex = activeWordIndex + 1;
+
+                //  Calculate stats NOW (To capture the speed of the word just typed)
+                const { progress, wpm, accuracy } = calculateStats();
+
+                // Check if game is complete
+                if (nextIndex >= targetWords.length) {
+
+                    //  Force LOCAL UI to 100% immediately (Visual Snap)
+                    setPlayerProgress(prev => ({
+                        ...prev,
+                        [currentPlayerId]: {
+                            progress: 100,
+                            accuracy: 100,
+                            wpm: wpm
+                        }
+                    }));
+
+                    finishGame();
+
+                } else {
+
+                    // Move to next word
+                    setActiveWordIndex(nextIndex);
+                    setCurrentInput("");
+
+                    // Update Local UI
+                    setPlayerProgress(prev => ({
+                        ...prev,
+                        [currentPlayerId]: { progress, accuracy, wpm }  // ✅ CHANGED
+                    }));
+
+                    // Emit progress to Server
+                    socket.emit("playerProgress", {
+                        roomToken: gameState.roomToken,
+                        progress,
+                        accuracy,
+                        wpm: wpm,
+                        wordCount: Math.floor(progress / 5),
+                        wordIndex: nextIndex
+                    });
+                }
+            }
+            return;
         }
     };
 
-    // --- RENDER FUNCTIONS ---
+    // Strict character logic
+    const handleChange = (e) => {
+        if (waitingForOthers) return;
+
+        const val = e.target.value;
+        const currentTargetWord = targetWords[activeWordIndex];
+
+        // If user deleted characters (backspace), allow it always
+        if (val.length < currentInput.length) {
+            setCurrentInput(val);
+            return;
+        }
+
+        //  Strict Typing
+        const charIndex = val.length - 1;
+
+        // Don't allow typing past the word length
+        if (val.length > currentTargetWord.length) return;
+
+        // Check if the typed character matches the target character
+        if (val[charIndex] === currentTargetWord[charIndex]) {
+            setCurrentInput(val);
+
+            // Live update WPM even inside word
+            const { progress, wpm, accuracy } = calculateStats();
+            setPlayerProgress(prev => ({
+                ...prev,
+                [currentPlayerId]: { progress, accuracy, wpm }
+            }));
+        }
+
+    };
+
+    // Game Finished Logic 
+    const finishGame = () => {
+        const { wpm, accuracy, timeElapsedSec, completedChars } = calculateStats();
+        //Wait for others
+        setWaitingForOthers(true);
+
+        setPlayerProgress(prev => ({
+            ...prev,
+            [currentPlayerId]: {
+                progress: 100,
+                accuracy: 100,
+                wpm
+            }
+        }));
+
+        // Send finish signal to server
+        const finalPlayerStats = {
+            wpm,
+            accuracy: 100,
+            progress: 100,
+            timeTaken: Math.round(timeElapsedSec),
+            wordsTyped: Math.round(completedChars / 5),
+            errorsMade: 0
+        };
+
+        socket.emit("playerFinished", {
+            roomToken: gameState.roomToken,
+            accuracy: 100,
+            stats: finalPlayerStats
+        });
+    };
+
     const renderPlayerTrack = (player) => {
-        // player object structure provided by user: player.User.username
-        const progressData = playerProgress[player.id] || { progress: 0, wpm: 0, accuracy: 100 };
-        const isCurrentPlayer = player.id === gameState.playerId;
+        //  Try to get Live Data from the socket
+        let progressData = playerProgress[player.id];
+
+        // 2. If no Live Data, check if the Database says they are finished
+        if (!progressData) {
+            if (player.time && player.speed) {
+                // They are finished! Use DB stats.
+                progressData = {
+                    progress: 100,
+                    wpm: player.speed,
+                    accuracy: player.accuracy || 100
+                };
+            } else {
+                // Default: They are at the start
+                progressData = { progress: 0, wpm: 0, accuracy: 100 };
+            }
+        }
+
+        // Use dynamic currentPlayerId
+        const isCurrentPlayer = player.id === currentPlayerId;
 
         return (
             <div key={player.id} className={`space-y-2 p-4 rounded-xl transition-all duration-300 ${isCurrentPlayer
@@ -278,9 +596,6 @@ const MultiplayerGame = () => {
                             }`}
                         style={{ width: `${progressData.progress}%` }}
                     >
-                        {progressData.progress > 10 && (
-                            <div className="h-full bg-gradient-to-r from-transparent via-[#FDF6EC]/30 to-transparent animate-pulse"></div>
-                        )}
                     </div>
                 </div>
             </div>
@@ -288,114 +603,147 @@ const MultiplayerGame = () => {
     };
 
     const renderTypingText = () => {
-        return gameState.text.split("").map((char, index) => {
-            let color = "text-[#D7CCC8]/70"; // Untyped text
-            let cursorClass = "";
+        return (
+            <div className="flex flex-wrap gap-2">
+                {targetWords.map((word, wIndex) => {
+                    let wordClass = "px-1 rounded ";
 
-            if (index < inputText.length) {
-                color = inputText[index] === char
-                    ? "text-[#C9A227]"
-                    : "text-[#FF6B6B]";
-
-            } else if (index === inputText.length) {
-                return (
-                    <span key={index} className="relative">
-                        <span className="absolute -left-0.5 h-full w-[2px] bg-[#C9A227] animate-pulse"></span>
-                        <span className="text-[#D7CCC8]/70">{char}</span>
-                    </span>
-                );
-            }
-
-            return <span key={index} className={`${color} ${cursorClass}`}>{char}</span>;
-        });
+                    if (wIndex < activeWordIndex) {
+                        // Completed words
+                        wordClass += "text-[#C9A227] opacity-60"; // Gold dim
+                        return <span key={wIndex} className={wordClass}>{word}</span>;
+                    } else if (wIndex === activeWordIndex) {
+                        // Current Active Word
+                        wordClass += "bg-[#C9A227]/20 border-b-2 border-[#C9A227] ";
+                        return (
+                            <span key={wIndex} className={wordClass}>
+                                {word.split("").map((char, cIndex) => {
+                                    let charColor = "text-[#D7CCC8]"; // Default
+                                    if (cIndex < currentInput.length) {
+                                        charColor = "text-[#C9A227]";
+                                    }
+                                    // cursor logic
+                                    const isCursor = cIndex === currentInput.length;
+                                    return (
+                                        <span key={cIndex} className={`${charColor} ${isCursor ? 'border-l-2 border-[#FDF6EC] animate-pulse' : ''}`}>
+                                            {char}
+                                        </span>
+                                    );
+                                })}
+                                {/* Cursor at end of word if needed */}
+                                {currentInput.length === word.length && (
+                                    <span className="border-l-2 border-[#FDF6EC] animate-pulse">&nbsp;</span>
+                                )}
+                            </span>
+                        );
+                    } else {
+                        // Future words
+                        wordClass += "text-[#D7CCC8]/40";
+                        return <span key={wIndex} className={wordClass}>{word}</span>;
+                    }
+                })}
+            </div>
+        );
     };
 
-    // --- Main Component Return ---
+    // Main Component Return
     if (gameState.status === 'pending') {
         return (
             <div className="min-h-screen relative overflow-hidden font-body">
-                {/* Vintage Wooden Background */}
                 <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B13] via-[#4E342E] to-[#6D4C41]">
-                    <div
-                        className="absolute inset-0 opacity-20"
-                        style={{
-                            backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23D7CCC8' fill-opacity='0.08'%3E%3Cpath d='M20 20.5V18H0V6h20V4H0v16.5zM0 20.5V37h20V24.5H0z'/%3E%3C/g%3E%3C/svg%3E")`,
-                            backgroundSize: '30px 30px'
-                        }}
-                    />
                     <div className="absolute top-0 left-1/2 w-1 h-full bg-gradient-to-b from-[#C9A227]/15 via-transparent to-transparent transform rotate-3 animate-pulse"></div>
                 </div>
 
                 <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
                     <div className="w-full max-w-md">
                         <div className="bg-[#FDF6EC]/10 backdrop-blur-xl border-2 border-[#C9A227]/30 rounded-2xl p-8 shadow-2xl shadow-[#4E342E]/50 relative">
-                            {/* Decorative Corners */}
-                            <div className="absolute top-3 left-3 w-4 h-4 border-l-2 border-t-2 border-[#C9A227] rounded-tl-lg"></div>
-                            <div className="absolute top-3 right-3 w-4 h-4 border-r-2 border-t-2 border-[#C9A227] rounded-tr-lg"></div>
-                            <div className="absolute bottom-3 left-3 w-4 h-4 border-l-2 border-b-2 border-[#C9A227] rounded-bl-lg"></div>
-                            <div className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2 border-[#C9A227] rounded-br-lg"></div>
-
                             <h1 className="font-heading text-3xl font-bold text-center text-[#FDF6EC] mb-6 drop-shadow-lg">
                                 <span className="bg-gradient-to-r from-[#C9A227] via-[#FDF6EC] to-[#C9A227] bg-clip-text text-transparent">
                                     Battle Arena
                                 </span>
                             </h1>
-
-                            {user && (
+                            {user ? (
                                 <div className="text-center mb-6 p-4 bg-[#C9A227]/10 border border-[#C9A227]/20 rounded-xl backdrop-blur-sm">
-                                    <p className="text-sm text-[#C9A227] font-medium">📜 Your battle results will be recorded!</p>
+                                    <p className="text-sm text-[#C9A227] font-medium">Your battle results will be recorded!</p>
                                 </div>
-                            )}
-
-                            {!user && (
+                            ) : (
                                 <div className="text-center mb-6 p-4 bg-[#FF6B6B]/10 border border-[#FF6B6B]/20 rounded-xl backdrop-blur-sm">
-                                    <p className="text-sm text-[#FF6B6B] font-medium">⚠️ Join to save your battle achievements!</p>
+                                    <p className="text-sm text-[#ff4b4b] font-medium">Join to save your battle achievements!</p>
                                 </div>
                             )}
 
                             {error && (
                                 <div className="text-center mb-4 p-3 bg-[#FF6B6B]/10 border border-[#FF6B6B]/30 rounded-lg">
-                                    <p className="text-[#FF6B6B] text-sm font-medium">{error}</p>
+                                    <p className="text-[#ff4b4b] text-sm font-medium">{error}</p>
                                 </div>
                             )}
 
                             <div className="flex flex-col gap-4">
                                 <button
                                     onClick={handleCreateRoom}
-                                    className="group w-full py-4 bg-gradient-to-r from-[#C9A227] to-[#B8941F] text-[#1C1C1C] font-bold rounded-full 
-                                             transition-all duration-300 shadow-lg shadow-[#C9A227]/30 hover:shadow-xl hover:shadow-[#C9A227]/40 
-                                             transform hover:scale-[1.02] relative overflow-hidden"
+                                    className="w-full py-4 bg-gradient-to-r from-[#C9A227] to-[#B8941F] text-[#1C1C1C] font-bold rounded-full shadow-lg shadow-[#C9A227]/30 hover:scale-[1.02] transition-transform flex items-center gap-2 justify-center"
                                 >
-                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#FDF6EC]/25 to-transparent 
-                                                     transform -skew-x-12 -translate-x-full group-hover:translate-x-full 
-                                                     transition-transform duration-1000"></div>
-                                    ⚔️ Create Battle Chamber
+                                    <Swords size={20} className="flex-shrink-0" /> Create Battle Chamber
                                 </button>
-
                                 <div className="flex items-center gap-2">
                                     <hr className="w-full border-[#6D4C41]" />
                                     <span className="text-[#D7CCC8] text-sm font-medium px-2">OR</span>
                                     <hr className="w-full border-[#6D4C41]" />
                                 </div>
+                                <div className="flex flex-col gap-4">
+                                    <form onSubmit={handleJoinRoom} className="flex flex-col gap-4">
+                                        <div className="space-y-1">
+                                            <input
+                                                type="text"
+                                                placeholder="Enter Chamber Token"
+                                                className={`w-full p-4 bg-[#4E342E]/60 backdrop-blur-sm border rounded-xl text-[#FDF6EC] outline-none transition-all duration-200 ${validationError
+                                                    ? 'border-red-500/80 bg-red-500/10'
+                                                    : 'border-[#6D4C41] focus:border-[#C9A227]'
+                                                    } ${isSubmitting ? 'opacity-75' : ''}`}
+                                                value={roomTokenInput}
+                                                onChange={handleInputChange}
+                                                disabled={isSubmitting}
+                                                maxLength={60}
+                                                autoComplete="off"
+                                                spellCheck="false"
+                                                aria-invalid={!!validationError}
+                                                aria-describedby={validationError ? "token-error" : undefined}
+                                            />
+                                            {validationError && (
+                                                <p id="token-error" className="text-red-400 text-sm mt-1 px-1">
+                                                    {validationError}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting || !roomTokenInput.trim()}
+                                            className={`w-full py-4 font-bold rounded-full border transition-all duration-200 flex items-center gap-2 justify-center ${isSubmitting || !roomTokenInput.trim()
+                                                ? 'bg-[#4E342E]/40 border-[#6D4C41]/50 text-[#C9A227]/60 cursor-not-allowed'
+                                                : 'bg-[#4E342E]/80 text-[#C9A227] border border-[#6D4C41] hover:border-[#C9A227] hover:bg-[#4E342E]/90 active:scale-[0.98]'
+                                                }`}
+                                            aria-label={isSubmitting ? "Joining chamber..." : "Join chamber"}
+                                        >
+                                            {isSubmitting ? (
+                                                <>
+                                                    <div className="w-5 h-5 border-2 border-[#C9A227]/30 border-t-[#C9A227] rounded-full animate-spin" />
+                                                    Joining...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Castle size={20} className="flex-shrink-0" />
+                                                    Join Chamber
+                                                </>
+                                            )}
+                                        </button>
+                                        {submitError && (
+                                            <p className="text-red-400 text-sm text-center px-2 py-2 bg-red-500/10 rounded-lg border border-red-500/30">
+                                                {submitError}
+                                            </p>
+                                        )}
+                                    </form>
+                                </div>
 
-                                <form onSubmit={handleJoinRoom} className="flex flex-col gap-4">
-                                    <input
-                                        type="text"
-                                        placeholder="Enter Chamber Token"
-                                        className="w-full p-4 bg-[#4E342E]/60 backdrop-blur-sm border border-[#6D4C41] rounded-xl 
-                                                 focus:outline-none focus:ring-2 focus:ring-[#C9A227]/50 focus:border-[#C9A227]
-                                                 text-[#FDF6EC] placeholder-[#D7CCC8]/70 transition-all duration-300"
-                                        value={roomTokenInput}
-                                        onChange={(e) => setRoomTokenInput(e.target.value)}
-                                    />
-                                    <button
-                                        type="submit"
-                                        className="w-full py-4 bg-[#4E342E]/80 text-[#C9A227] font-bold rounded-full border border-[#6D4C41] 
-                                                 hover:border-[#C9A227] hover:bg-[#4E342E] transition-all duration-300"
-                                    >
-                                        🏰 Join Chamber
-                                    </button>
-                                </form>
                             </div>
                         </div>
                     </div>
@@ -406,54 +754,21 @@ const MultiplayerGame = () => {
 
     return (
         <div className="min-h-screen relative overflow-hidden font-body">
-            {/* Enhanced Vintage Wooden Background */}
             <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B13] via-[#4E342E] to-[#6D4C41]">
-                <div
-                    className="absolute inset-0 opacity-25"
-                    style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23D7CCC8' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E")`,
-                        backgroundSize: '40px 40px'
-                    }}
-                />
-
-                <div className="absolute inset-0">
-                    <div className="absolute top-0 left-1/4 w-1 h-full bg-gradient-to-b from-[#C9A227]/20 via-transparent to-transparent transform rotate-12 animate-pulse"></div>
-                    <div className="absolute top-0 right-1/4 w-1 h-full bg-gradient-to-b from-[#C9A227]/15 via-transparent to-transparent transform -rotate-12 animate-pulse delay-1000"></div>
-                </div>
-
-                <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    {[...Array(6)].map((_, i) => (
-                        <div
-                            key={i}
-                            className="absolute w-1 h-1 bg-[#D7CCC8]/30 rounded-full animate-float"
-                            style={{
-                                left: `${15 + i * 15}%`,
-                                top: `${10 + i * 10}%`,
-                                animationDelay: `${i * 2}s`,
-                                animationDuration: `${8 + i}s`
-                            }}
-                        />
-                    ))}
-                </div>
+                <div className="absolute top-0 left-1/4 w-1 h-full bg-gradient-to-b from-[#C9A227]/20 via-transparent to-transparent transform rotate-12 animate-pulse"></div>
             </div>
 
-            {/* Main Content */}
             <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-4">
                 <div className="w-full max-w-4xl">
-                    {/* Header */}
                     <div className="flex justify-between items-center mb-6">
                         <div className="flex items-center gap-4">
                             <h2 className="font-heading text-2xl font-bold text-[#FDF6EC]">
                                 Battle Chamber:
                                 <span className="text-[#C9A227] tracking-widest ml-2 font-mono">{gameState.roomToken}</span>
                             </h2>
-
-                            {savingStats && (
-                                <div className="bg-[#C9A227]/10 backdrop-blur-sm border border-[#C9A227]/30 rounded-lg px-4 py-2">
-                                    <div className="text-[#C9A227] text-sm animate-pulse flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-[#C9A227] rounded-full animate-bounce"></div>
-                                        Recording battle results...
-                                    </div>
+                            {waitingForOthers && (
+                                <div className="bg-[#C9A227]/20 backdrop-blur-sm border border-[#C9A227] rounded-lg px-6 py-2 animate-pulse">
+                                    <span className="text-[#C9A227] font-bold">🏁 Finished! Awaiting other warriors...</span>
                                 </div>
                             )}
                         </div>
@@ -461,66 +776,38 @@ const MultiplayerGame = () => {
 
                     {gameState.status === 'lobby' && (
                         <div className="text-center mb-6">
-                            <p className="text-[#D7CCC8] text-lg">
-                                ⏳ Gathering warriors... Share the chamber token with fellow members!
-                            </p>
+                            <p className="text-[#D7CCC8] text-lg">⏳ Gathering warriors... Share the chamber token!</p>
                         </div>
                     )}
 
-                    {/* Players Panel */}
-                    <div className="bg-[#FDF6EC]/8 backdrop-blur-xl border-2 border-[#C9A227]/40 rounded-2xl p-6 mb-8 shadow-2xl shadow-[#4E342E]/50 relative">
-                        <div className="absolute top-3 left-3 w-4 h-4 border-l-2 border-t-2 border-[#C9A227] rounded-tl-lg"></div>
-                        <div className="absolute top-3 right-3 w-4 h-4 border-r-2 border-t-2 border-[#C9A227] rounded-tr-lg"></div>
-                        <div className="absolute bottom-3 left-3 w-4 h-4 border-l-2 border-b-2 border-[#C9A227] rounded-bl-lg"></div>
-                        <div className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2 border-[#C9A227] rounded-br-lg"></div>
-
+                    <div className="bg-[#FDF6EC]/8 backdrop-blur-xl border-2 border-[#C9A227]/40 rounded-2xl p-6 mb-8 shadow-2xl relative">
                         <h3 className="font-heading text-xl font-semibold text-[#C9A227] mb-4 flex items-center gap-2">
-                            ⚔️ Warriors ({gameState.players.length})
+                            <Swords /> Warriors ({gameState.players.length})
                         </h3>
                         <div className="space-y-3">
-                            {gameState.players
-                                .filter(player => player.User)
-                                .map(renderPlayerTrack)}
+                            {gameState.players.filter(p => p.User).map(renderPlayerTrack)}
                         </div>
                     </div>
 
                     {/* Lobby Controls */}
-                    {gameState.status === 'lobby' && gameState.players.find(p => p.id === gameState.playerId)?.isHost && (
-                        <div className="text-center mb-8">
-                            <div className="bg-[#FDF6EC]/8 backdrop-blur-xl border-2 border-[#C9A227]/30 rounded-2xl p-6 shadow-lg shadow-[#4E342E]/30">
+                    {gameState.status === 'lobby' && gameState.players.find(p => p.id === currentPlayerId)?.isHost && (  // ✅ CHANGED
+                        <div className="text-center mb-8 ">
+                            <div className="bg-[#FDF6EC]/8 backdrop-blur-xl border-2 border-[#C9A227]/30 rounded-2xl p-6 shadow-lg flex items-center justify-center gap-6 ">
                                 {gameState.players.length >= 2 ? (
-                                    <>
-                                        <button
-                                            onClick={handleStartGame}
-                                            className="group bg-gradient-to-r from-[#C9A227] to-[#B8941F] text-[#1C1C1C] font-bold px-8 py-4 rounded-full 
-                                                     transition-all duration-300 shadow-lg shadow-[#C9A227]/30 hover:shadow-xl hover:shadow-[#C9A227]/40 
-                                                     transform hover:scale-105 relative overflow-hidden"
-                                        >
-                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#FDF6EC]/25 to-transparent 
-                                                           transform -skew-x-12 -translate-x-full group-hover:translate-x-full 
-                                                           transition-transform duration-1000"></div>
-                                            ⚔️ Commence Battle!
-                                        </button>
-                                        <p className="text-sm text-[#D7CCC8] mt-3">You are the Master - begin when ready!</p>
-                                    </>
+                                    <button
+                                        onClick={handleStartGame}
+                                        className="bg-gradient-to-r from-[#C9A227] to-[#B8941F] text-[#1C1C1C] font-bold px-8 py-4 rounded-full shadow-lg shadow-[#C9A227]/30 hover:scale-105 transition-transform flex items-center gap-2"
+                                    >
+                                        <Swords /> Commence Battle!
+                                    </button>
                                 ) : (
-                                    <>
-                                        <button
-                                            disabled
-                                            className="bg-[#4E342E]/60 text-[#D7CCC8]/50 font-bold px-8 py-4 rounded-full cursor-not-allowed border border-[#6D4C41]"
-                                        >
-                                            ⏳ Awaiting Warriors
-                                        </button>
-                                        <p className="text-sm text-[#C9A227] mt-3">⚠️ Awaiting at least one opponent to join the battle!</p>
-                                        <p className="text-xs text-[#D7CCC8]/70 mt-2">A minimum of 2 members required for battle</p>
-                                    </>
-                                )}
-
-                                {error && (
-                                    <div className="mt-4 p-3 bg-[#FF6B6B]/10 border border-[#FF6B6B]/30 rounded-lg">
-                                        <p className="text-[#FF6B6B] text-sm font-medium">{error}</p>
-                                    </div>
-                                )}
+                                    <div className="text-[#D7CCC8]/70">Waiting for opponents...</div>
+                                )}<button
+                                    onClick={handleCancelGame}
+                                    className="text-[#FF6B6B] hover:text-[#ff8585] text-lg font-medium border border-[#FF6B6B]/30 hover:border-[#FF6B6B] px-6 py-4 rounded-full transition-all bg-[#FF6B6B]/5 hover:bg-[#FF6B6B]/10"
+                                >
+                                    ❌ Disband Lobby
+                                </button>
                             </div>
                         </div>
                     )}
@@ -529,67 +816,49 @@ const MultiplayerGame = () => {
                     {gameState.status === 'in-progress' && (
                         <>
                             {/* Typing Area */}
-                            <div className="relative mb-8" onClick={() => inputRef.current?.focus()}>
+                            <div className="relative mb-8" onClick={() => !waitingForOthers && inputRef.current?.focus()}>
                                 <div className="bg-[#FDF6EC]/8 backdrop-blur-xl border-2 border-[#C9A227]/40 rounded-2xl p-1 shadow-2xl shadow-[#4E342E]/50 relative">
-                                    <div className="absolute top-3 left-3 w-4 h-4 border-l-2 border-t-2 border-[#C9A227] rounded-tl-lg"></div>
-                                    <div className="absolute top-3 right-3 w-4 h-4 border-r-2 border-t-2 border-[#C9A227] rounded-tr-lg"></div>
-                                    <div className="absolute bottom-3 left-3 w-4 h-4 border-l-2 border-b-2 border-[#C9A227] rounded-bl-lg"></div>
-                                    <div className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2 border-[#C9A227] rounded-br-lg"></div>
 
-                                    <div className="text-2xl leading-relaxed tracking-wider bg-[#4E342E]/40 backdrop-blur-sm border border-[#6D4C41] rounded-xl p-6 h-48 overflow-y-auto select-none
-                                                  scrollbar-thin scrollbar-track-[#4E342E] scrollbar-thumb-[#C9A227]">
+                                    {/* Waiting Overlay */}
+                                    {waitingForOthers && (
+                                        <div className="absolute inset-0 z-50 bg-[#2D1B13]/80 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center">
+                                            <div className="text-4xl animate-bounce">🛡️</div>
+                                            <h3 className="text-2xl text-[#C9A227] font-bold mt-4">Victory Secured!</h3>
+                                            <p className="text-[#D7CCC8] mt-2">Observing the battlefield...</p>
+                                        </div>
+                                    )}
+
+                                    <div className="text-2xl leading-relaxed tracking-wider bg-[#4E342E]/40 backdrop-blur-sm border border-[#6D4C41] rounded-xl p-6 h-48 overflow-y-auto select-none font-mono">
                                         {renderTypingText()}
                                     </div>
-                                    <textarea
-                                        ref={inputRef}
-                                        value={inputText}
-                                        onChange={handleTyping}
-                                        onPaste={(e) => e.preventDefault()}
-                                        onKeyDown={(e) => {
-                                            // Block copy/paste shortcuts
-                                            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-                                                e.preventDefault();
-                                                return;
-                                            }
 
-                                            // STRICT MODE: Block Space if current word has errors
-                                            if (e.key === ' ') {
-                                                const currentInput = inputText;
-                                                const targetSlice = gameState.text.substring(0, currentInput.length);
-                                                
-                                                if (currentInput !== targetSlice) {
-                                                    e.preventDefault();
-                                                    return;
-                                                }
-                                            }
-
-                                            // Count physical keystrokes for strict accuracy
-                                            if (e.key.length === 1 || e.key === 'Backspace') {
-                                                totalKeystrokes.current += 1;
-                                            }
-                                        }}
-                                        onMouseDown={(e) => e.preventDefault()}
-                                        className="absolute inset-0 w-full h-full bg-transparent text-transparent caret-transparent outline-none resize-none p-6 text-2xl select-none"
-                                        autoFocus
-                                    />
-
+                                    {!waitingForOthers && (
+                                        <input
+                                            ref={inputRef}
+                                            value={currentInput}
+                                            onChange={handleChange}
+                                            onKeyDown={handleKeyDown}
+                                            onPaste={(e) => e.preventDefault()}
+                                            className="absolute opacity-0 w-0 h-0"
+                                            autoFocus
+                                        />
+                                    )}
+                                </div>
+                                <div className="mt-2 text-center text-[#D7CCC8]/50 text-sm">
+                                    Type the highlighted word. Press <span className="text-[#C9A227] border border-[#C9A227]/30 px-1 rounded">Space</span> to advance. Errors are blocked.
                                 </div>
                             </div>
 
                             {/* Personal Stats */}
-                            {playerProgress[gameState.playerId] && (
+                            {playerProgress[currentPlayerId] && (
                                 <div className="text-center mb-6">
                                     <div className="inline-flex gap-6 bg-[#4E342E]/60 backdrop-blur-sm border border-[#6D4C41] rounded-xl px-8 py-4">
                                         <div className="text-center">
-                                            <div className="text-2xl font-bold text-[#C9A227]">{playerProgress[gameState.playerId].wpm || 0}</div>
+                                            <div className="text-2xl font-bold text-[#C9A227]">{playerProgress[currentPlayerId].wpm || 0}</div>  // ✅ CHANGED
                                             <div className="text-xs text-[#D7CCC8]">Speed</div>
                                         </div>
                                         <div className="text-center">
-                                            <div className="text-2xl font-bold text-[#C9A227]">{playerProgress[gameState.playerId].accuracy || 100}%</div>
-                                            <div className="text-xs text-[#D7CCC8]">Precision</div>
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="text-2xl font-bold text-[#C9A227]">{Math.round(playerProgress[gameState.playerId].progress || 0)}%</div>
+                                            <div className="text-2xl font-bold text-[#C9A227]">{Math.round(playerProgress[currentPlayerId].progress || 0)}%</div>  // ✅ CHANGED
                                             <div className="text-xs text-[#D7CCC8]">Progress</div>
                                         </div>
                                     </div>
@@ -598,46 +867,8 @@ const MultiplayerGame = () => {
                         </>
                     )}
                 </div>
+
             </div>
-
-            {/* Custom Animations */}
-            <style jsx>{`
-                @keyframes float {
-                    0%, 100% {
-                        transform: translateY(0px) translateX(0px);
-                        opacity: 0.3;
-                    }
-                    50% {
-                        transform: translateY(-20px) translateX(12px);
-                        opacity: 0.8;
-                    }
-                }
-                
-                .animate-float {
-                    animation: float 8s ease-in-out infinite;
-                }
-
-                /* Custom Wooden Scrollbar */
-                .scrollbar-thin::-webkit-scrollbar {
-                    width: 8px;
-                    height: 8px;
-                }
-                
-                .scrollbar-track-\\[\\#4E342E\\]::-webkit-scrollbar-track {
-                    background: #4E342E;
-                    border-radius: 10px;
-                }
-                
-                .scrollbar-thumb-\\[\\#C9A227\\]::-webkit-scrollbar-thumb {
-                    background: #C9A227;
-                    border-radius: 10px;
-                    border: 2px solid #4E342E;
-                }
-                
-                .scrollbar-thumb-\\[\\#C9A227\\]::-webkit-scrollbar-thumb:hover {
-                    background: #B8941F;
-                }
-            `}</style>
         </div>
     );
 };
