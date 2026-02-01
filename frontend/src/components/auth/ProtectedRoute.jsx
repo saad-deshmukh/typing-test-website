@@ -1,18 +1,16 @@
-import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/authContext';
 
 const ProtectedRoute = ({ children }) => {
-  const { user, loading, isTokenValid } = useAuth();
+
+  const { user, loading } = useAuth();
   const location = useLocation();
 
-  // 1. If auth state is still loading, show vintage-themed loading screen
+  // loading screen if auth is loading
   if (loading) {
     return (
       <div className="min-h-screen relative overflow-hidden font-body">
-        {/* Vintage Wooden Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B13] via-[#4E342E] to-[#6D4C41]">
-          {/* Wooden Texture Overlay */}
           <div 
             className="absolute inset-0 opacity-20"
             style={{
@@ -46,7 +44,6 @@ const ProtectedRoute = ({ children }) => {
         {/* Loading Content */}
         <div className="relative z-10 min-h-screen flex items-center justify-center">
           <div className="text-center">
-            {/* Loading Panel - Glassmorphism Style */}
             <div className="bg-[#FDF6EC]/10 backdrop-blur-xl border-2 border-[#C9A227]/30 rounded-2xl p-8 shadow-2xl shadow-[#4E342E]/50 relative">
               {/* Decorative Brass Corners */}
               <div className="absolute top-2 left-2 w-3 h-3 border-l-2 border-t-2 border-[#C9A227] rounded-tl-lg"></div>
@@ -78,7 +75,7 @@ const ProtectedRoute = ({ children }) => {
         </div>
 
         {/* Custom Animations */}
-        <style jsx>{`
+        <style>{`
           @keyframes float {
             0%, 100% {
               transform: translateY(0px) translateX(0px);
@@ -98,12 +95,12 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  // 2. After loading, if no user or token is invalid, redirect to login
-  if (!user || !isTokenValid()) {
+  //  After loading, if no user, redirect to login.
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 3. If authenticated, render the children component
+  // If authenticated, render the children component
   return children;
 };
 

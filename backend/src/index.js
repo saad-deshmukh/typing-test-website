@@ -1,45 +1,81 @@
-const express = require("express");
-const cors = require("cors");
-require("dotenv").config();
-const http = require("http");
-
-const sequelize = require("./config/db");
-const initSocket = require("./socket");
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import http from "http";
+import cookieParser from "cookie-parser";
+import sequelize from "./config/db.js";
+import initSocket from "./socket.js";
+import rateLimit from "express-rate-limit"; // ✅ 1. Import rateLimit
 
 // Import Routes
-const authRoutes = require("./routes/authRoutes");
-const gameRoutes = require("./routes/gameRoutes"); // You were missing this import
+import authRoutes from "./routes/authRoutes.js";
+import gameRoutes from "./routes/gameRoutes.js";
+import statsRoutes from "./routes/statsRoutes.js";
+import aiAnalysisRoutes from "./routes/aiAnalysis.js";
+
+dotenv.config();
 
 const app = express();
 
-// --- Middleware Setup (Order is CRITICAL) ---
+// CORS Middleware
+app.use(cors({ origin: "http://localhost:5173", credentials: true, })); 
 
-// 1. CORS Middleware: Handles cross-origin requests. Must come first.
-app.use(cors({ origin: "http://localhost:5173" })); // Be specific for security
-
-// 2. Request Logger: A simple middleware to see all incoming requests.
+// Request Logger
 app.use((req, res, next) => {
-  console.log(`➡️  Received Request: ${req.method} ${req.path}`);
   next();
 });
 
-// 3. JSON Body Parser: This allows your server to read the JSON data from the signup form.
+// JSON Body Parser
 app.use(express.json());
 
-// --- API Routes ---
-// These must come AFTER the middleware.
-app.use("/api/auth", authRoutes);
-app.use("/api/game", gameRoutes); // You were missing this line
+app.use(cookieParser());
 
-// --- Server and Database Initialization ---
+// Rate Limiters
 
-// Health Check Route
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 10,
+  message: { error: "Too many login attempts" }
+});
+// Strict limiter for Auth (10 attempts per 15 min)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 50,  // covers 50 refreshes
+  message: { error: "Too many auth requests." },
+  //  Skip rate limit for /auth/me 
+  skip: (req) => req.path === '/me'
+});
+
+
+// General limiter for API (100 requests per 15 min)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 100,
+  message: { error: "Too many requests. Please slow down." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply Limiters to Routes
+app.use("/api/auth/login", loginLimiter);     // Login only
+app.use("/api/auth/me", authLimiter);       // Auth check only
+app.use("/api/auth/logout", authLimiter);   // Logout only
+app.use("/api/auth/signup", loginLimiter);    // Signup too
+app.use("/api/auth", apiLimiter, authRoutes); // Everything else
+  app.use("/api/auth/login", loginLimiter);     
+app.use("/api/auth/me", authLimiter);       
+app.use("/api/auth/logout", authLimiter);   
+app.use("/api/auth/signup", loginLimiter);  
+app.use("/api/auth", apiLimiter, authRoutes); 
+app.use("/api/game", apiLimiter, gameRoutes); 
+app.use("/api/stats", statsRoutes);       
+app.use("/api", apiLimiter, aiAnalysisRoutes);
 app.get("/", (req, res) => res.send("Server is running..."));
 
-// Sync Database
-sequelize.sync({ alter: true })
-  .then(() => console.log("✅ Database synced"))
-  .catch(err => console.error("❌ Error syncing database:", err));
+sequelize
+  .sync()
+  .then(() => console.log("Database synced"))
+  .catch((err) => console.error("Error syncing database:", err));
 
 // Create HTTP server & attach Socket.IO
 const server = http.createServer(app);
@@ -47,5 +83,5 @@ initSocket(server);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
