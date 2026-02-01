@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/authContext";
 import statsService from "../services/statsService";
-import {  User,Target,TrendingUp,Users,Trophy } from "lucide-react";
+import { User, Target, TrendingUp, Users, Trophy, BarChart3, Award,Rocket } from "lucide-react";
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  // New states for user stats preview
+  //  states for user stats preview
   const [userStats, setUserStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
 
@@ -25,7 +25,7 @@ const LandingPage = () => {
   const goToProfile = () => navigate("/profile");
   const goToLeaderboard = () => navigate("/leaderboard");
 
-  // Fetch user stats when user is logged in
+  // Fetch stats for logged in user
   useEffect(() => {
     if (user) {
       fetchUserStats();
@@ -46,9 +46,7 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden font-body">
-      {/* Vintage Wooden Background with Sunlight Animation */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B13] via-[#4E342E] to-[#6D4C41]">
-        {/* Wooden Texture Overlay */}
         <div
           className="absolute inset-0 opacity-30"
           style={{
@@ -57,13 +55,11 @@ const LandingPage = () => {
           }}
         />
 
-        {/* Animated Sunlight Beams */}
         <div className="absolute inset-0">
           <div className="absolute top-0 left-1/4 w-1 h-full bg-gradient-to-b from-[#C9A227]/20 via-transparent to-transparent transform rotate-12 animate-pulse"></div>
           <div className="absolute top-0 left-3/4 w-1 h-full bg-gradient-to-b from-[#C9A227]/15 via-transparent to-transparent transform -rotate-12 animate-pulse delay-1000"></div>
         </div>
 
-        { /* Floating Dust Particles */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {[...Array(6)].map((_, i) => (
             <div
@@ -80,23 +76,22 @@ const LandingPage = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-7xl flex flex-col lg:flex-row gap-8">
 
-          {/* Left Side: Game Modes */}
-          <div className="flex-1 flex flex-col justify-center items-center lg:items-start p-8 text-center lg:text-left">
-            <h1 className="font-heading text-5xl md:text-6xl font-bold text-[#FDF6EC] mb-4 drop-shadow-lg">
+
+          <div className="flex-1 flex flex-col justify-center lg:justify-start items-center lg:items-start p-8 text-center lg:text-left">
+            <h1 className="font-heading text-5xl md:text-6xl xl:text-7xl font-bold text-[#FDF6EC] mb-6 drop-shadow-lg">
               <span className="bg-gradient-to-r from-[#C9A227] via-[#FDF6EC] to-[#C9A227] bg-clip-text text-transparent">
                 Typing Mastery
               </span>
             </h1>
-            <p className="text-lg md:text-xl mb-10 max-w-lg text-[#D7CCC8] leading-relaxed">
+            <p className="text-lg md:text-xl mb-12 max-w-xl text-[#D7CCC8] leading-relaxed">
               Master the art of typing on this vintage wooden desk, where tradition meets modern technology in perfect harmony.
             </p>
 
-            {/* Game Mode Buttons - Wooden Engraved Style */}
-            <div className="flex flex-col sm:flex-row gap-6 mb-8">
+
+            <div className="flex flex-col sm:flex-row gap-6 mb-10 mt-2">
               <button
                 onClick={goSinglePlayer}
                 className="group px-8 py-4 bg-gradient-to-br from-[#6D4C41] to-[#4E342E] text-[#FDF6EC] font-semibold rounded-full border-2 border-[#C9A227] hover:border-[#FDF6EC] transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 hover:shadow-[#C9A227]/30"
@@ -115,7 +110,7 @@ const LandingPage = () => {
               </button>
             </div>
 
-            {/* Statistics & Leaderboard Links */}
+
             <div className="flex flex-col sm:flex-row gap-4">
               {user && (
                 <button
@@ -136,10 +131,10 @@ const LandingPage = () => {
             </div>
           </div>
 
-          {/* Right Side: Enhanced Auth Section - Glassmorphism Panel */}
-          <div className="flex-1 flex flex-col justify-center items-center">
-            <div className="w-full max-w-md bg-[#FDF6EC]/12 backdrop-blur-xl border-2 border-[#C9A227]/50 rounded-2xl p-8 shadow-2xl shadow-[#4E342E]/50 relative">
-              {/* Decorative Brass Corners */}
+
+          <div className="flex-1 flex flex-col justify-center items-center lg:items-end">
+            <div className="w-full max-w-lg bg-[#FDF6EC]/12 backdrop-blur-xl border border-[#C9A227]/50 rounded-2xl p-8 shadow-2xl shadow-[#4E342E]/50 relative">
+
               <div className="absolute top-2 left-2 w-4 h-4 border-l-2 border-t-2 border-[#C9A227] rounded-tl-lg"></div>
               <div className="absolute top-2 right-2 w-4 h-4 border-r-2 border-t-2 border-[#C9A227] rounded-tr-lg"></div>
               <div className="absolute bottom-2 left-2 w-4 h-4 border-l-2 border-b-2 border-[#C9A227] rounded-bl-lg"></div>
@@ -150,7 +145,7 @@ const LandingPage = () => {
                   <h2 className="font-heading text-2xl font-semibold mb-2 text-[#FDF6EC]">Welcome back,</h2>
                   <p className="text-2xl font-bold text-[#C9A227] mb-6">{user?.username || "User"}!</p>
 
-                  {/* User Stats Preview - Wooden Panel Style */}
+
                   {loadingStats ? (
                     <div className="mb-6 text-center">
                       <p className="text-[#D7CCC8] text-sm animate-pulse">Retrieving your achievements...</p>
@@ -181,11 +176,11 @@ const LandingPage = () => {
                     </div>
                   ) : userStats && userStats.totalGames === 0 ? (
                     <div className="mb-6 text-center">
-                      <p className="text-[#D7CCC8] text-sm">🌟 Begin your typing journey!</p>
+                      <p className="text-[#D7CCC8] text-sm">Begin your typing journey!</p>
                     </div>
                   ) : null}
 
-                  <div className="flex flex-col gap-4 w-full">                   
+                  <div className="flex flex-col gap-4 w-full">
                     <button
                       onClick={goToProfile}
                       className="w-full py-3 bg-gradient-to-r from-[#6D4C41] to-[#4E342E] text-[#FDF6EC] font-semibold rounded-full border border-[#C9A227]/50 hover:border-[#C9A227] transition-all duration-300 hover:shadow-lg hover:shadow-[#C9A227]/20 flex items-center justify-center gap-2"
@@ -203,22 +198,39 @@ const LandingPage = () => {
                 </>
               ) : (
                 <>
-                  <h2 className="font-heading text-3xl font-semibold mb-6 text-[#FDF6EC] text-center">Sign Up</h2>
+                  <h2 className="font-heading text-3xl font-semibold mb-6 text-[#FDF6EC] text-center">
+                    Sign Up
+                  </h2>
 
-                  {/* Benefits of signing up */}
                   <div className="mb-6 text-center">
-                    <p className="text-[#D7CCC8] text-sm mb-4">Unlock your potential:</p>
+                    <div className="flex items-center justify-center gap-2 mb-4">
+                      <span className="text-[#C9A227] text-lg">
+                        <Rocket />
+                      </span>
+                      <p className="text-[#D7CCC8] text-sm">
+                        Unlock your potential:
+                      </p>
+                    </div>
+
                     <div className="flex flex-col gap-3 text-sm text-[#D7CCC8]">
                       <div className="flex items-center gap-3 bg-[#4E342E]/30 rounded-lg p-2">
-                        <span className="text-[#C9A227] text-lg">📊</span>
+                        <span className="text-[#C9A227] text-lg">
+                          <BarChart3 />
+                        </span>
                         <span>Track your typing mastery</span>
                       </div>
+
                       <div className="flex items-center gap-3 bg-[#4E342E]/30 rounded-lg p-2">
-                        <span className="text-[#C9A227] text-lg">🏆</span>
+                        <span className="text-[#C9A227] text-lg">
+                          <Award />
+                        </span>
                         <span>Compete in the Leaderboard</span>
                       </div>
+
                       <div className="flex items-center gap-3 bg-[#4E342E]/30 rounded-lg p-2">
-                        <span className="text-[#C9A227] text-lg">⚔️</span>
+                        <span className="text-[#C9A227] text-lg">
+                          <Users />
+                        </span>
                         <span>Challenge fellow typists</span>
                       </div>
                     </div>
@@ -231,6 +243,7 @@ const LandingPage = () => {
                     >
                       Sign In
                     </button>
+
                     <button
                       onClick={() => navigate("/signup")}
                       className="w-full py-3 bg-gradient-to-r from-[#C9A227] to-[#B8941F] text-[#1C1C1C] font-bold rounded-full transition-all duration-300 shadow-lg shadow-[#C9A227]/30 hover:shadow-xl hover:shadow-[#C9A227]/40 transform hover:scale-105"
@@ -239,6 +252,7 @@ const LandingPage = () => {
                     </button>
                   </div>
                 </>
+
               )}
             </div>
           </div>
@@ -246,7 +260,7 @@ const LandingPage = () => {
       </div>
 
       {/* Custom Animations */}
-      <style jsx>{`
+      <style>{`
         @keyframes float {
           0%, 100% {
             transform: translateY(0px) translateX(0px);
