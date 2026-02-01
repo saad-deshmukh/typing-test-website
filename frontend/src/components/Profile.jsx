@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import statsService from '../services/statsService';
 import StatsChart from './StatsChart';
 import { useAuth } from '../context/authContext';
-import AIAnalysisModal from './AIAnalysisModal'; // ← ADD THIS LINE
+import AIAnalysisModal from './AIAnalysisModal'; 
+import {
+  Trophy, Zap, Gauge, Target, FileText, Clock, Percent, Brain, Lock, Swords,TrendingUp,LineChart,Hourglass,
+  AlertTriangle
+} from "lucide-react";
+
 
 const Profile = () => {
   const { user } = useAuth();
@@ -31,17 +36,16 @@ const Profile = () => {
     }
   };
 
-  // **NEW: Handle AI Analysis**
+  // Handle AI Analysis
   const handleAIAnalysis = () => {
-     setShowAIAnalysis(true);
+    setShowAIAnalysis(true);
   };
 
   if (loading) {
     return (
       <div className="min-h-screen relative overflow-hidden font-body">
-        {/* Vintage Wooden Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B13] via-[#4E342E] to-[#6D4C41]">
-          <div 
+          <div
             className="absolute inset-0 opacity-20"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23D7CCC8' fill-opacity='0.08'%3E%3Cpath d='M20 20.5V18H0V6h20V4H0v16.5zM0 20.5V37h20V24.5H0z'/%3E%3C/g%3E%3C/svg%3E")`,
@@ -73,7 +77,7 @@ const Profile = () => {
     return (
       <div className="min-h-screen relative overflow-hidden font-body">
         <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B13] via-[#4E342E] to-[#6D4C41]">
-          <div 
+          <div
             className="absolute inset-0 opacity-20"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23D7CCC8' fill-opacity='0.08'%3E%3Cpath d='M20 20.5V18H0V6h20V4H0v16.5zM0 20.5V37h20V24.5H0z'/%3E%3C/g%3E%3C/svg%3E")`,
@@ -85,7 +89,7 @@ const Profile = () => {
         <div className="relative z-10 min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="bg-[#FDF6EC]/10 backdrop-blur-xl border-2 border-[#FF6B6B]/40 rounded-2xl p-8 shadow-2xl relative">
-              <div className="text-[#FF6B6B] text-xl mb-4 font-heading">⚠️ Records Unavailable</div>
+              <div className="text-[#FF6B6B] text-xl mb-4 font-heading "><AlertTriangle/> Records Unavailable</div>
               <p className="text-[#D7CCC8] mb-6">{error}</p>
               <button
                 onClick={() => navigate('/')}
@@ -105,25 +109,20 @@ const Profile = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden font-body">
-      {/* Enhanced Vintage Wooden Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B13] via-[#4E342E] to-[#6D4C41]">
-        {/* Wooden Texture Overlay */}
-        <div 
+        <div
           className="absolute inset-0 opacity-25"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23D7CCC8' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/svg%3E")`,
             backgroundSize: '40px 40px'
           }}
         />
-        
-        {/* Enhanced Animated Sunlight Beams */}
         <div className="absolute inset-0">
           <div className="absolute top-0 left-1/4 w-1 h-full bg-gradient-to-b from-[#C9A227]/20 via-transparent to-transparent transform rotate-12 animate-pulse"></div>
           <div className="absolute top-0 left-3/4 w-1 h-full bg-gradient-to-b from-[#C9A227]/15 via-transparent to-transparent transform -rotate-12 animate-pulse delay-1000"></div>
           <div className="absolute top-0 right-1/3 w-1 h-full bg-gradient-to-b from-[#C9A227]/10 via-transparent to-transparent transform rotate-6 animate-pulse delay-2000"></div>
         </div>
 
-        {/* Floating Dust Particles */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {[...Array(8)].map((_, i) => (
             <div
@@ -140,10 +139,8 @@ const Profile = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="relative z-10 min-h-screen">
         <div className="container mx-auto px-4 py-8">
-          {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <div>
               <h1 className="font-heading text-4xl font-bold text-[#FDF6EC] mb-2 drop-shadow-lg">
@@ -162,57 +159,55 @@ const Profile = () => {
             </button>
           </div>
 
-          {/* Statistics Overview */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard
               title="Challenges Completed"
               value={userData.totalGames}
-              icon="⚔️"
+              Icon={Trophy}
               color="bg-gradient-to-br from-[#C9A227] to-[#B8941F]"
             />
             <StatCard
               title="Peak Mastery"
               value={`${userData.bestWpm} WPM`}
-              icon="⚡"
-              color="bg-gradient-to-br from-[#6D4C41] to-[#4E342E]"
+              Icon={Zap}
+              color="bg-gradient-to-br from-[#C9A227] to-[#B8941F]"
             />
             <StatCard
               title="Average Speed"
               value={`${userData.averageWpm} WPM`}
-              icon="📊"
-              color="bg-gradient-to-br from-[#8B5A3C] to-[#6D4C41]"
+              Icon={Gauge}
+              color="bg-gradient-to-br from-[#C9A227] to-[#B8941F]"
             />
             <StatCard
               title="Peak Precision"
               value={`${userData.bestAccuracy}%`}
-              icon="🎯"
-              color="bg-gradient-to-br from-[#A67C5A] to-[#8B5A3C]"
+              Icon={Target}
+              color="bg-gradient-to-br from-[#C9A227] to-[#B8941F]"
             />
           </div>
 
-          {/* Additional Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <StatCard
               title="Total Words Crafted"
               value={userData.totalWordsTyped.toLocaleString()}
-              icon="📜"
-              color="bg-gradient-to-br from-[#B8941F] to-[#A67C5A]"
+              Icon={FileText}
+              color="bg-gradient-to-br from-[#C9A227] to-[#B8941F]"
             />
             <StatCard
               title="Time in the Forge"
               value={formatTime(userData.totalTimeTyped)}
-              icon="⏳"
-              color="bg-gradient-to-br from-[#A67C5A] to-[#8B5A3C]"
+              Icon={Clock}
+              color="bg-gradient-to-br from-[#C9A227] to-[#B8941F]"
             />
             <StatCard
               title="Average Precision"
               value={`${userData.averageAccuracy}%`}
-              icon="✨"
-              color="bg-gradient-to-br from-[#8B5A3C] to-[#6D4C41]"
+              Icon={Percent}
+              color="bg-gradient-to-br from-[#C9A227] to-[#B8941F]"
             />
           </div>
 
-          {/* **NEW: AI Performance Analysis Section** */}
+          {/* AI Performance Analysis Section */}
           <div className="bg-[#FDF6EC]/8 backdrop-blur-xl border-2 border-[#C9A227]/40 rounded-2xl p-6 mb-8 shadow-2xl shadow-[#4E342E]/50 relative">
             {/* Decorative Frame */}
             <div className="absolute top-3 left-3 w-4 h-4 border-l-2 border-t-2 border-[#C9A227] rounded-tl-lg"></div>
@@ -222,11 +217,13 @@ const Profile = () => {
 
             <div className="text-center">
               <h2 className="font-heading text-2xl font-bold text-[#C9A227] mb-3 flex items-center justify-center gap-2">
-                <span role="img" aria-hidden="true">🤖</span>
+                <Brain size={24} />
                 AI Performance Analysis
               </h2>
+
               <p className="text-[#D7CCC8] mb-6 max-w-2xl mx-auto">
-                Unlock personalized insights about your typing patterns, identify improvement areas, and receive AI-powered recommendations to accelerate your mastery journey.
+                Unlock personalized insights about your typing patterns, identify improvement areas,
+                and receive AI-powered recommendations to accelerate your mastery journey.
               </p>
 
               {/* Condition: Only show if user has sufficient data */}
@@ -234,16 +231,17 @@ const Profile = () => {
                 <button
                   onClick={handleAIAnalysis}
                   className="group bg-gradient-to-r from-[#C9A227] to-[#B8941F] text-[#1C1C1C] font-bold px-8 py-4 rounded-full 
-                           transition-all duration-300 shadow-lg shadow-[#C9A227]/30 hover:shadow-xl hover:shadow-[#C9A227]/40 
-                           transform hover:scale-105 relative overflow-hidden"
+                 transition-all duration-300 shadow-lg shadow-[#C9A227]/30 hover:shadow-xl hover:shadow-[#C9A227]/40 
+                 transform hover:scale-105 relative overflow-hidden"
                   aria-label="Analyze your typing performance using AI"
                 >
                   {/* Shimmer Effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#FDF6EC]/25 to-transparent 
-                                 transform -skew-x-12 -translate-x-full group-hover:translate-x-full 
-                                 transition-transform duration-1000"></div>
+                       transform -skew-x-12 -translate-x-full group-hover:translate-x-full 
+                       transition-transform duration-1000"></div>
+
                   <div className="flex items-center gap-2 relative z-10">
-                    <span role="img" aria-hidden="true">🧠</span>
+                    <Brain size={18} />
                     <span>Analyze My Performance</span>
                   </div>
                 </button>
@@ -254,10 +252,11 @@ const Profile = () => {
                     className="bg-[#4E342E]/60 text-[#D7CCC8]/50 font-bold px-8 py-4 rounded-full cursor-not-allowed"
                   >
                     <div className="flex items-center gap-2">
-                      <span role="img" aria-hidden="true">🔒</span>
+                      <Lock size={18} />
                       <span>Complete More Challenges</span>
                     </div>
                   </button>
+
                   <p className="text-[#D7CCC8]/70 text-sm mt-2">
                     Complete at least 3 challenges to unlock AI analysis
                   </p>
@@ -265,6 +264,7 @@ const Profile = () => {
               )}
             </div>
           </div>
+
 
           {/* Performance Chart */}
           {performanceHistory.length > 0 && (
@@ -276,7 +276,7 @@ const Profile = () => {
               <div className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2 border-[#C9A227] rounded-br-lg"></div>
 
               <h2 className="font-heading text-2xl font-bold text-[#C9A227] mb-4 flex items-center gap-2">
-                📈 Mastery Progression
+                <TrendingUp/> Mastery Progression
               </h2>
               <div className="bg-[#4E342E]/40 backdrop-blur-sm border border-[#6D4C41] rounded-xl p-4">
                 <StatsChart data={performanceHistory} />
@@ -293,11 +293,11 @@ const Profile = () => {
             <div className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2 border-[#C9A227] rounded-br-lg"></div>
 
             <h2 className="font-heading text-2xl font-bold text-[#C9A227] mb-4 flex items-center gap-2">
-              📋 Recent Activities
+              <Hourglass className="text-brass-gold w-5 h-5" /> Recent Activities
             </h2>
             {recentGames.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-6xl mb-4">🎯</div>
+                <div className="text-6xl mb-4"><Target size={32}/></div>
                 <p className="text-[#D7CCC8] text-lg mb-6">No challenges completed yet, craftsman.</p>
                 <button
                   onClick={() => navigate('/game')}
@@ -334,12 +334,24 @@ const Profile = () => {
                           <td className="px-6 py-4 text-[#D7CCC8]">{game.wordsTyped}</td>
                           <td className="px-6 py-4 text-[#D7CCC8]">{game.timeTaken}s</td>
                           <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              game.isMultiplayer 
-                                ? 'bg-[#C9A227]/20 text-[#C9A227] border border-[#C9A227]/30' 
-                                : 'bg-[#6D4C41]/40 text-[#FDF6EC] border border-[#6D4C41]'
-                            }`}>
-                              {game.isMultiplayer ? '⚔️ Multiplayer Battle' : '🎯 Solo Practice'}
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium leading-none ${game.isMultiplayer
+                              ? 'bg-[#C9A227]/20 text-[#C9A227] border border-[#C9A227]/30'
+                              : 'bg-[#6D4C41]/40 text-[#FDF6EC] border border-[#6D4C41]'
+                              }`}>
+                              {
+                                game.isMultiplayer ? (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                    <Swords size={14} />
+                                    Multiplayer Battle
+                                  </span>
+                                ) : (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                    <Target size={14} />
+                                    Solo Practice
+                                  </span>
+                                )
+                              }
+
                             </span>
                           </td>
                         </tr>
@@ -354,7 +366,7 @@ const Profile = () => {
       </div>
 
       {/* Custom Animations */}
-      <style jsx>{`
+      <style>{`
         @keyframes float {
           0%, 100% {
             transform: translateY(0px) translateX(0px);
@@ -391,7 +403,7 @@ const Profile = () => {
           background: #B8941F;
         }
       `}</style>
-       {showAIAnalysis && (
+      {showAIAnalysis && (
         <AIAnalysisModal
           isOpen={showAIAnalysis}
           onClose={() => setShowAIAnalysis(false)}
@@ -403,7 +415,7 @@ const Profile = () => {
 };
 
 // Enhanced Vintage StatCard Component
-const StatCard = ({ title, value, icon, color }) => (
+const StatCard = ({ title, value, Icon, color }) => (
   <div className="group bg-[#FDF6EC]/8 backdrop-blur-xl border-2 border-[#C9A227]/30 rounded-2xl p-6 shadow-lg shadow-[#4E342E]/30 
                  hover:shadow-xl hover:shadow-[#4E342E]/50 transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden">
     {/* Decorative Mini Corners */}
@@ -419,7 +431,7 @@ const StatCard = ({ title, value, icon, color }) => (
 
     <div className="flex items-center relative z-10">
       <div className={`${color} rounded-xl p-4 text-[#1C1C1C] text-2xl mr-4 shadow-lg border border-[#C9A227]/20`}>
-        {icon}
+        <Icon size={26} strokeWidth={2} />
       </div>
       <div>
         <p className="text-[#D7CCC8] text-sm font-medium mb-1">{title}</p>
@@ -429,11 +441,11 @@ const StatCard = ({ title, value, icon, color }) => (
   </div>
 );
 
-// Helper function to format time in seconds to readable format
+//  function to format time in seconds to readable format
 const formatTime = (seconds) => {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  
+
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
   } else if (minutes > 0) {
@@ -444,3 +456,4 @@ const formatTime = (seconds) => {
 };
 
 export default Profile;
+
