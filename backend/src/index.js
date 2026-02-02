@@ -5,7 +5,7 @@ import http from "http";
 import cookieParser from "cookie-parser";
 import sequelize from "./config/db.js";
 import initSocket from "./socket.js";
-import rateLimit from "express-rate-limit"; // ✅ 1. Import rateLimit
+import rateLimit from "express-rate-limit";
 
 // Import Routes
 import authRoutes from "./routes/authRoutes.js";
@@ -18,7 +18,12 @@ dotenv.config();
 const app = express();
 
 // CORS Middleware
-app.use(cors({ origin: "http://localhost:5173", credentials: true, })); 
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  })
+);
 
 // Request Logger
 app.use((req, res, next) => {
@@ -57,16 +62,11 @@ const apiLimiter = rateLimit({
 });
 
 // Apply Limiters to Routes
-app.use("/api/auth/login", loginLimiter);     // Login only
-app.use("/api/auth/me", authLimiter);       // Auth check only
-app.use("/api/auth/logout", authLimiter);   // Logout only
-app.use("/api/auth/signup", loginLimiter);    // Signup too
-app.use("/api/auth", apiLimiter, authRoutes); // Everything else
-  app.use("/api/auth/login", loginLimiter);     
+app.use("/api/auth/login", loginLimiter);  
 app.use("/api/auth/me", authLimiter);       
 app.use("/api/auth/logout", authLimiter);   
-app.use("/api/auth/signup", loginLimiter);  
-app.use("/api/auth", apiLimiter, authRoutes); 
+app.use("/api/auth/signup", loginLimiter);    
+app.use("/api/auth", apiLimiter, authRoutes);           
 app.use("/api/game", apiLimiter, gameRoutes); 
 app.use("/api/stats", statsRoutes);       
 app.use("/api", apiLimiter, aiAnalysisRoutes);
