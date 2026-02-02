@@ -99,8 +99,8 @@ export const login = async (req, res) => {
     // SET JWT AS HTTPONLY COOKIE
     res.cookie("access_token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // False in dev, True in prod
-      sameSite: "lax", // Lax is often better for dev
+      secure: true, // False in dev, True in prod
+      sameSite: "none", // Lax is often better for dev
       maxAge: 60 * 60 * 1000, // 1 hour
     });
 
@@ -123,8 +123,8 @@ export const logout = (req, res) => {
   try {
     res.clearCookie("access_token", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: true,
+      sameSite: "none",
     });
 
     res.status(200).json({ message: "Logged out successfully" });
