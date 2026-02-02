@@ -1,4 +1,4 @@
-import express from "express";
+import express from "express"; 
 import cors from "cors";
 import dotenv from "dotenv";
 import http from "http";
@@ -42,6 +42,7 @@ const loginLimiter = rateLimit({
   max: 10,
   message: { error: "Too many login attempts" }
 });
+
 // Strict limiter for Auth (10 attempts per 15 min)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
@@ -50,7 +51,6 @@ const authLimiter = rateLimit({
   //  Skip rate limit for /auth/me 
   skip: (req) => req.path === '/me'
 });
-
 
 // General limiter for API (100 requests per 15 min)
 const apiLimiter = rateLimit({
@@ -70,18 +70,20 @@ app.use("/api/auth", apiLimiter, authRoutes);
 app.use("/api/game", apiLimiter, gameRoutes); 
 app.use("/api/stats", statsRoutes);       
 app.use("/api", apiLimiter, aiAnalysisRoutes);
-app.get("/", (req, res) => res.send("Server is running..."));
 
-sequelize
-  .sync()
-  .then(() => console.log("Database synced"))
-  .catch((err) => console.error("Error syncing database:", err));
+app.get("/", (req, res) => res.send("Server is running..."));
 
 // Create HTTP server & attach Socket.IO
 const server = http.createServer(app);
 initSocket(server);
 
 const PORT = process.env.PORT || 5000;
+
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+sequelize
+  .authenticate()
+  .then(() => console.log("Database connected"))
+  .catch((err) => console.error("Database error:", err));
