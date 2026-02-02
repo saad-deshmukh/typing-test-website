@@ -3,7 +3,7 @@ import axios from 'axios';
 class AIAnalysisService {
   async analyzePerformance(userStats) {
     const response = await axios.post(
-      'http://localhost:5000/api/analyze-performance', 
+      `${import.meta.env.VITE_API_BASE_URL}/api/analyze-performance`,
       { userStats },
       {
         headers: { 'Content-Type': 'application/json' },
