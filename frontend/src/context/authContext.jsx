@@ -14,9 +14,10 @@ export const AuthProvider = ({ children }) => {
 
   // Axios instance (cookie based)
   const api = axios.create({
-    baseURL: "http://localhost:5000/api",
+    baseURL: `${import.meta.env.VITE_API_BASE_URL}`,
     withCredentials: true,
   });
+    
 
   api.interceptors.response.use(
     response => response,

@@ -16,7 +16,7 @@ const AIAnalysisModal = ({ isOpen, onClose, userStats }) => {
     try {
       // URL to backend server
       const response = await axios.post(
-        'http://localhost:5000/api/analyze-performance',
+        `${import.meta.env.VITE_API_BASE_URL}/analyze-performance`,
         { userStats },
         {
           withCredentials: true,
@@ -24,7 +24,7 @@ const AIAnalysisModal = ({ isOpen, onClose, userStats }) => {
             'Content-Type': 'application/json',
           }
         }
-      );
+      );    `${import.meta.env.VITE_API_BASE_URL}/auth/login`
 
       const data = response.data;
       setAnalysis(data.analysis);
