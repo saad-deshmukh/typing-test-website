@@ -84,6 +84,6 @@ server.listen(PORT, () => {
 });
 
 sequelize
-  .authenticate()
-  .then(() => console.log("Database connected"))
-  .catch((err) => console.error("Database error:", err));
+  .sync()
+  .then(() => console.log("Database synced"))
+  .catch((err) => console.error("Database Sync error:", err));
