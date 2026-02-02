@@ -16,6 +16,8 @@ import aiAnalysisRoutes from "./routes/aiAnalysis.js";
 dotenv.config();
 
 const app = express();
+//trust proxy
+app.set("trust proxy", 1);
 
 // CORS Middleware
 app.use(
