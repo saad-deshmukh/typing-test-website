@@ -298,7 +298,7 @@ const Profile = () => {
             {recentGames.length === 0 ? (
               <div className="text-center py-12">
                 <div className="flex items-center justify-center gap-2 mb-6">
-                  <Target size={24} />
+                  <Target size={24} className='text-[#C9A227]' />
                   <p className="text-[#D7CCC8] text-lg">
                     No challenges completed yet, craftsman.
                   </p>
