@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import statsService from '../services/statsService';
 import StatsChart from './StatsChart';
 import { useAuth } from '../context/authContext';
-import AIAnalysisModal from './AIAnalysisModal'; 
+import AIAnalysisModal from './AIAnalysisModal';
 import {
-  Trophy, Zap, Gauge, Target, FileText, Clock, Percent, Brain, Lock, Swords,TrendingUp,LineChart,Hourglass,
+  Trophy, Zap, Gauge, Target, FileText, Clock, Percent, Brain, Lock, Swords, TrendingUp, LineChart, Hourglass,
   AlertTriangle
 } from "lucide-react";
 
@@ -89,7 +89,7 @@ const Profile = () => {
         <div className="relative z-10 min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="bg-[#FDF6EC]/10 backdrop-blur-xl border-2 border-[#FF6B6B]/40 rounded-2xl p-8 shadow-2xl relative">
-              <div className="text-[#FF6B6B] text-xl mb-4 font-heading "><AlertTriangle/> Records Unavailable</div>
+              <div className="text-[#FF6B6B] text-xl mb-4 font-heading "><AlertTriangle /> Records Unavailable</div>
               <p className="text-[#D7CCC8] mb-6">{error}</p>
               <button
                 onClick={() => navigate('/')}
@@ -276,7 +276,7 @@ const Profile = () => {
               <div className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2 border-[#C9A227] rounded-br-lg"></div>
 
               <h2 className="font-heading text-2xl font-bold text-[#C9A227] mb-4 flex items-center gap-2">
-                <TrendingUp/> Mastery Progression
+                <TrendingUp /> Mastery Progression
               </h2>
               <div className="bg-[#4E342E]/40 backdrop-blur-sm border border-[#6D4C41] rounded-xl p-4">
                 <StatsChart data={performanceHistory} />
@@ -297,8 +297,12 @@ const Profile = () => {
             </h2>
             {recentGames.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-6xl mb-4"><Target size={32}/></div>
-                <p className="text-[#D7CCC8] text-lg mb-6">No challenges completed yet, craftsman.</p>
+                <div className="flex items-center gap-2 mb-6">
+                  <Target size={24} />
+                  <p className="text-[#D7CCC8] text-lg">
+                    No challenges completed yet, craftsman.
+                  </p>
+                </div>
                 <button
                   onClick={() => navigate('/game')}
                   className="group bg-gradient-to-r from-[#C9A227] to-[#B8941F] text-[#1C1C1C] font-bold px-8 py-3 rounded-full 
