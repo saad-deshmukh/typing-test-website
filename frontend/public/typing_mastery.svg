@@ -1,0 +1,56 @@
+<svg width="420" height="420" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gold gradient -->
+    <linearGradient id="goldGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE9A6"/>
+      <stop offset="45%" stop-color="#FFD700"/>
+      <stop offset="75%" stop-color="#C9A227"/>
+      <stop offset="100%" stop-color="#8B6B1F"/>
+    </linearGradient>
+
+    <!-- Wood gradient -->
+    <radialGradient id="woodGradient" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#7A4A24"/>
+      <stop offset="70%" stop-color="#4B2A14"/>
+      <stop offset="100%" stop-color="#2E180B"/>
+    </radialGradient>
+
+    <!-- Shadow -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+
+    <!-- Circular text path -->
+    <path id="textCircle"
+          d="M210,210 m-145,0 a145,145 0 1,1 290,0 a145,145 0 1,1 -290,0"/>
+  </defs>
+
+  <!-- Base emblem -->
+  <circle cx="210" cy="210" r="190" fill="url(#woodGradient)" filter="url(#shadow)"/>
+  <circle cx="210" cy="210" r="165" fill="none" stroke="url(#goldGradient)" stroke-width="10"/>
+
+  <!-- Repeated circular brand text -->
+  <text font-family="Cinzel, Trajan Pro, Georgia, serif"
+        font-size="12"
+        letter-spacing="6"
+        fill="url(#goldGradient)">
+    <textPath href="#textCircle" startOffset="0%">
+      TYPING MASTERY • TYPING MASTERY • TYPING MASTERY • TYPING MASTERY • TYPING MASTERY • TYPING MASTERY • TYPING MASTERY • TYPING MASTERY •
+    </textPath>
+  </text>
+
+  <!-- Crown -->
+  <path d="M165 135l18 34 27-42 27 42 18-34v50h-90z"
+        fill="url(#goldGradient)"/>
+
+  <!-- Keyboard icon -->
+  <rect x="135" y="240" width="150" height="42" rx="10" fill="url(#goldGradient)"/>
+  <g fill="#2E180B">
+    <rect x="148" y="250" width="18" height="12" rx="3"/>
+    <rect x="170" y="250" width="18" height="12" rx="3"/>
+    <rect x="192" y="250" width="18" height="12" rx="3"/>
+    <rect x="214" y="250" width="18" height="12" rx="3"/>
+    <rect x="236" y="250" width="18" height="12" rx="3"/>
+    <rect x="158" y="266" width="104" height="10" rx="3"/>
+  </g>
+</svg> 
