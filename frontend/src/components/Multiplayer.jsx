@@ -455,7 +455,7 @@ const MultiplayerGame = () => {
                     // Update Local UI
                     setPlayerProgress(prev => ({
                         ...prev,
-                        [currentPlayerId]: { progress, accuracy, wpm }  // ✅ CHANGED
+                        [currentPlayerId]: { progress, accuracy, wpm }  
                     }));
 
                     // Emit progress to Server
@@ -790,7 +790,7 @@ const MultiplayerGame = () => {
                     </div>
 
                     {/* Lobby Controls */}
-                    {gameState.status === 'lobby' && gameState.players.find(p => p.id === currentPlayerId)?.isHost && (  // ✅ CHANGED
+                    {gameState.status === 'lobby' && gameState.players.find(p => p.id === currentPlayerId)?.isHost && (  
                         <div className="text-center mb-8 ">
                             <div className="bg-[#FDF6EC]/8 backdrop-blur-xl border-2 border-[#C9A227]/30 rounded-2xl p-6 shadow-lg flex items-center justify-center gap-6 ">
                                 {gameState.players.length >= 2 ? (
@@ -854,11 +854,11 @@ const MultiplayerGame = () => {
                                 <div className="text-center mb-6">
                                     <div className="inline-flex gap-6 bg-[#4E342E]/60 backdrop-blur-sm border border-[#6D4C41] rounded-xl px-8 py-4">
                                         <div className="text-center">
-                                            <div className="text-2xl font-bold text-[#C9A227]">{playerProgress[currentPlayerId].wpm || 0}</div>  // ✅ CHANGED
+                                            <div className="text-2xl font-bold text-[#C9A227]">{playerProgress[currentPlayerId].wpm || 0}</div>  
                                             <div className="text-xs text-[#D7CCC8]">Speed</div>
                                         </div>
                                         <div className="text-center">
-                                            <div className="text-2xl font-bold text-[#C9A227]">{Math.round(playerProgress[currentPlayerId].progress || 0)}%</div>  // ✅ CHANGED
+                                            <div className="text-2xl font-bold text-[#C9A227]">{Math.round(playerProgress[currentPlayerId].progress || 0)}%</div> 
                                             <div className="text-xs text-[#D7CCC8]">Progress</div>
                                         </div>
                                     </div>
